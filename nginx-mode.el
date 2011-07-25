@@ -109,18 +109,125 @@
   '("charset_map " "events " "geo " "http " "if " "imap " "limit_except " "location " "mail " "map " "server " "split_clients " "upstream ")
   "Nginx blocks.")
 
+(defvar nginx-variables
+  ;; come up with regexp to check rewrite is first then highlight this?
+  '("last" "break" "redirect" "permanent"
+    "on" "off" "put" "delete" "mkcol" "copy" "move"
+    ))
+
 ;; create the regex string for each class of keywords
 (defvar nginx-keywords-regexp (regexp-opt nginx-keywords 'words))
 (defvar nginx-functions-regexp (regexp-opt nginx-functions 'words))
+(defvar nginx-variables-regexp (regexp-opt nginx-variables 'words))
 
 ;; clear memory
 (setq nginx-keywords nil)
 (setq nginx-functions nil)
+(setq nginx-variables nil)
+
+;; (setq nginx-font-lock-keywords nil)
+;;    ("\\(\$[0-9]+\\)[^0-9]" 1 font-lock-constant-face)
+;;    ("\$[A-Za-z0-9_\-]+" . font-lock-variable-name-face)
+;;    (";$" . font-lock-pseudo-keyword-face)
 
 (setq nginx-font-lock-keywords
   `(
     (,nginx-functions-regexp . font-lock-function-name-face)
-    (,nginx-keywords-regexp . font-lock-keyword-face)))
+    (,nginx-keywords-regexp . font-lock-keyword-face)
+    (,nginx-variables-regexp . font-lock-constant-face) ))
+
+;;; Indent logic from ajc's nginx-mode
+
+(defcustom nginx-indent-level 4
+  "*Indentation of Nginx statements."
+  :type 'integer :group 'nginx)
+
+(defcustom nginx-indent-tabs-mode nil
+  "*Indentation can insert tabs in nginx mode if this is non-nil."
+  :type 'boolean :group 'nginx)
+
+
+(defun nginx-block-indent ()
+  "If point is in a block, return the indentation of the first line of that
+block (the line containing the opening brace).  Used to set the indentation
+of the closing brace of a block."
+  (save-excursion
+    (save-match-data
+      (let ((opoint (point))
+            (apoint (search-backward "{" nil t)))
+        (when apoint
+          ;; This is a bit of a hack and doesn't allow for strings.  We really
+          ;; want to parse by sexps at some point.
+          (let ((close-braces (count-matches "}" apoint opoint))
+                (open-braces 0))
+            (while (and apoint (> close-braces open-braces))
+              (setq apoint (search-backward "{" nil t))
+              (when apoint
+                (setq close-braces (count-matches "}" apoint opoint))
+                (setq open-braces (1+ open-braces)))))
+          (if apoint
+              (current-indentation)
+            nil))))))
+
+
+(defun nginx-comment-line-p ()
+  "Return non-nil iff this line is a comment."
+  (save-excursion
+    (save-match-data
+      (beginning-of-line)
+      (looking-at "^\\s-*#"))))
+
+(defun nginx-indent-line ()
+  "Indent current line as nginx code."
+  (interactive)
+  (beginning-of-line)
+  (if (bobp)
+      (indent-line-to 0)                ; First line is always non-indented
+    (let ((not-indented t)
+          (block-indent (nginx-block-indent))
+          cur-indent)
+      (cond
+       ((and (looking-at "^\\s-*}\\s-*$") block-indent)
+        ;; This line contains a closing brace and we're at the inner
+        ;; block, so we should indent it matching the indentation of
+        ;; the opening brace of the block.
+        (setq cur-indent block-indent))
+       (t
+        ;; Otherwise, we did not start on a block-ending-only line.
+        (save-excursion
+          ;; Iterate backwards until we find an indentation hint
+          (while not-indented
+            (forward-line -1)
+            (cond
+             ;; Comment lines are ignored unless we're at the start of the
+             ;; buffer.
+             ((nginx-comment-line-p)
+              (if (bobp)
+                  (setq not-indented nil)))
+
+             ;; Brace or paren on a line by itself will already be indented to
+             ;; the right level, so we can cheat and stop there.
+             ((looking-at "^\\s-*}\\s-*")
+              (setq cur-indent (current-indentation))
+              (setq not-indented nil))
+
+             ;; Indent by one level more than the start of our block.  We lose
+             ;; if there is more than one block opened and closed on the same
+             ;; line but it's still unbalanced; hopefully people don't do that.
+             ((looking-at "^.*{[^\n}]*$")
+              (setq cur-indent (+ (current-indentation) nginx-indent-level))
+              (setq not-indented nil))
+
+             ;; Start of buffer.
+             ((bobp)
+              (setq not-indented nil)))))))
+
+      ;; We've figured out the indentation, so do it.
+      (if (and cur-indent (> cur-indent 0))
+	  (indent-line-to cur-indent)
+        (indent-line-to 0)))))
+
+
 
 ;;;###autoload
 (define-derived-mode nginx-mode conf-space-mode "nginx"
@@ -128,8 +235,26 @@
   ;; code for syntax highlighting
   (setq font-lock-defaults '((nginx-font-lock-keywords)))
 
+  (set (make-local-variable 'comment-start) "# ")
+  (set (make-local-variable 'comment-start-skip) "#+ *")
+  (set (make-local-variable 'comment-use-syntax) t)
+  (set (make-local-variable 'comment-end) "")
+  (set (make-local-variable 'comment-auto-fill-only-comments) t)
+
+  (set (make-local-variable 'indent-line-function) 'nginx-indent-line)
+  (set (make-local-variable 'indent-tabs-mode) nginx-indent-tabs-mode)
+  (set (make-local-variable 'require-final-newline) t)
+  (set (make-local-variable 'paragraph-ignore-fill-prefix) t)
+  (set (make-local-variable 'paragraph-start) "\f\\|[ 	]*$\\|#$")
+  (set (make-local-variable 'paragraph-separate) "\\([ 	\f]*\\|#\\)$")
+
+
+
   ;; clear memory
   (setq nginx-keywords-regexp nil)
-  (setq nginx-functions-regexp nil))
+  (setq nginx-functions-regexp nil)
+  (setq nginx-variables-regexp nil)
+  )
+
 
 (provide 'nginx-mode)
