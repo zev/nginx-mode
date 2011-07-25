@@ -10,13 +10,15 @@ CMD_DECL_STOP_REG = /ngx_null_command|\};/
 CMD_NAME_REG = /\{\s*ngx_string\s*\("(.*)"\)\s*,/
 
 commands = Hash.new
+command_loc = Hash.new { |h,k| h[k] = [] }
 command_types = Hash.new { |h,k| h[k] = [] }
 
 in_command_declaration = false
 current_command = nil
 valid_locs = nil
 
-ARGF.each_line do |line|
+ARGV.each do |file|
+  File.readlines(file).each do |line|
   if in_command_declaration
     if CMD_DECL_STOP_REG =~ line
       current_command = nil
@@ -24,6 +26,7 @@ ARGF.each_line do |line|
     elsif current_command && valid_locs.nil?
       valid_locs = line.strip.chomp.split("|")
       commands[current_command] = valid_locs
+      command_loc[file] << current_command
       valid_locs.each { |l| command_types[l] << current_command }
       current_command = nil
     elsif current_command.nil?
@@ -38,11 +41,20 @@ ARGF.each_line do |line|
     in_command_declaration = CMD_DECL_START_REG =~ line
   end
 end
+end
 
-def command_list(cmds)
-  "'(" + cmds.map { |c| "\"#{c}\""}.join(" ") + ")"
+def command_list(cmds, quote = "'")
+  "#{quote}(" + cmds.map { |c| "\"#{c}\""}.join(" ") + ")"
 end
 
 puts "Commands", command_list(commands.keys.sort)
 puts "", ""
 puts "Block Commands", command_list(command_types["NGX_CONF_BLOCK"].sort)
+
+puts "Doc Commands"
+puts "'("
+command_loc.each do |f, vals|
+  pfile = File.basename(f).gsub(/ngx_|_module|\.c/, "")
+  puts vals.map { |v| command_list([pfile, v], "") }.join(" ")
+end
+puts ")"
