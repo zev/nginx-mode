@@ -227,7 +227,17 @@ of the closing brace of a block."
 	  (indent-line-to cur-indent)
         (indent-line-to 0)))))
 
+(defun nginx-doc-lookup ()
+  (interactive)
+  (let ((cmd (symbol-at-point))
+        (nginx-doc-assoc '(
+                           ('log_format "HttpLogModule")
+                           ("access_log" "HttpLogModule")
+                           ("HttpLogModule" "open_log_file_cache")
+                           )))
 
+        (message "http://wiki.nginx.org/%S#%S" (cdr (assoc cmd nginx-doc-assoc)) cmd)
+        ))
 
 ;;;###autoload
 (define-derived-mode nginx-mode conf-space-mode "nginx"
@@ -247,7 +257,6 @@ of the closing brace of a block."
   (set (make-local-variable 'paragraph-ignore-fill-prefix) t)
   (set (make-local-variable 'paragraph-start) "\f\\|[ 	]*$\\|#$")
   (set (make-local-variable 'paragraph-separate) "\\([ 	\f]*\\|#\\)$")
-
 
 
   ;; clear memory

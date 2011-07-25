@@ -47,6 +47,10 @@ def command_list(cmds, quote = "'")
   "#{quote}(" + cmds.map { |c| "\"#{c}\""}.join(" ") + ")"
 end
 
+def url_name(file)
+  File.basename(file).gsub(/ngx_|\.c/, "").split("_").map { |s| s.capitalize }.join("")
+end
+
 puts "Commands", command_list(commands.keys.sort)
 puts "", ""
 puts "Block Commands", command_list(command_types["NGX_CONF_BLOCK"].sort)
@@ -54,7 +58,7 @@ puts "Block Commands", command_list(command_types["NGX_CONF_BLOCK"].sort)
 puts "Doc Commands"
 puts "'("
 command_loc.each do |f, vals|
-  pfile = File.basename(f).gsub(/ngx_|_module|\.c/, "")
-  puts vals.map { |v| command_list([pfile, v], "") }.join(" ")
+  pfile = url_name(f)
+  puts vals.map { |v| command_list([v, pfile], "") }.join(" ")
 end
 puts ")"
