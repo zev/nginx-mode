@@ -43,8 +43,8 @@ ARGV.each do |file|
 end
 end
 
-def command_list(cmds, quote = "'")
-  "#{quote}(" + cmds.map { |c| "\"#{c}\""}.join(" ") + ")"
+def command_list(cmds)
+  "(" + cmds.map { |c| "\"#{c}\""}.join(" ") + ")"
 end
 
 def url_name(file)
@@ -59,6 +59,6 @@ puts "Doc Commands"
 puts "'("
 command_loc.each do |f, vals|
   pfile = url_name(f)
-  puts vals.map { |v| command_list([v, pfile], "") }.join(" ")
+  puts vals.map { |v| "(" + [v, pfile].join(" ") + ")" }.join(" ")
 end
 puts ")"
